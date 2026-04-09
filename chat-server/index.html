@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Arena</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0a0a12;
+    color: #e0e0e0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+
+  /* ── Main layout ── */
+  #app {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+
+  /* ── Welcome / input area ── */
+  #welcome {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    transition: all 0.4s ease;
+  }
+  #welcome.minimized {
+    flex: 0;
+    padding: 16px 20px;
+    justify-content: flex-start;
+  }
+  .logo {
+    font-size: 32px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #e94560, #ff6b6b, #c44dff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 8px;
+    transition: font-size 0.4s ease;
+  }
+  #welcome.minimized .logo { font-size: 18px; margin-bottom: 0; }
+  .tagline {
+    color: #555;
+    font-size: 14px;
+    margin-bottom: 32px;
+    transition: all 0.3s ease;
+  }
+  #welcome.minimized .tagline { display: none; }
+
+  .input-box {
+    width: 100%;
+    max-width: 640px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: #14141f;
+    border: 1px solid #2a2a4a;
+    border-radius: 14px;
+    padding: 6px 6px 6px 18px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  .input-box:focus-within {
+    border-color: #e94560;
+    box-shadow: 0 0 0 3px rgba(233,69,96,0.12);
+  }
+  .input-box input {
+    flex: 1;
+    background: none;
+    border: none;
+    color: #e0e0e0;
+    font-size: 15px;
+    outline: none;
+    padding: 10px 0;
+  }
+  .input-box input::placeholder { color: #444; }
+  .rounds-pill {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    color: #888;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    cursor: pointer;
+    outline: none;
+    flex-shrink: 0;
+  }
+  .send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: none;
+    background: #e94560;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.2s, transform 0.15s;
+  }
+  .send-btn:hover { transform: scale(1.05); }
+  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+  .send-btn svg { width: 18px; height: 18px; }
+
+  /* ── Conversation history ── */
+  #conversation {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 0 20px 24px;
+    max-width: 740px;
+    width: 100%;
+    margin: 0 auto;
+  }
+
+  /* ── Question bubble ── */
+  .q-bubble {
+    align-self: flex-end;
+    background: #1e2a40;
+    color: #c8d8f0;
+    padding: 12px 18px;
+    border-radius: 16px 16px 4px 16px;
+    font-size: 14px;
+    max-width: 80%;
+    line-height: 1.5;
+  }
+
+  /* ── Loading state ── */
+  .loading-card {
+    background: #12121c;
+    border: 1px solid #1e1e32;
+    border-radius: 16px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .loading-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .spinner-ring {
+    width: 28px; height: 28px;
+    border: 3px solid #1e1e32;
+    border-top-color: #e94560;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+    flex-shrink: 0;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-status {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.5;
+  }
+  .loading-status .step { transition: color 0.3s; }
+  .loading-status .step.active { color: #e94560; }
+  .loading-status .step.done { color: #3abb73; }
+
+  /* ── Live feed ── */
+  .live-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+  .live-entry {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  .live-entry.thinking {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #0e0e18;
+    color: #555;
+  }
+  .live-name {
+    font-weight: 700;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .model-tag {
+    font-size: 10px;
+    color: #444;
+    background: #1a1a2e;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 400;
+  }
+  .thinking-dots span {
+    animation: dotBounce 1.4s infinite;
+    display: inline-block;
+    color: #e94560;
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotBounce {
+    0%, 80%, 100% { opacity: 0.2; transform: translateY(0); }
+    40% { opacity: 1; transform: translateY(-3px); }
+  }
+  .live-entry.is-response {
+    background: #0e1118;
+    border-left: 3px solid #3a6ea5;
+  }
+  .live-entry.is-debate {
+    background: #140e18;
+    border-left: 3px solid #e94560;
+  }
+  .live-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .live-phase {
+    font-size: 10px;
+    color: #555;
+    margin-left: auto;
+  }
+  .live-content {
+    font-size: 12px;
+    color: #999;
+    line-height: 1.5;
+  }
+  .log-entry {
+    padding: 6px 12px;
+    background: #0a0a12;
+    border: 1px dashed #1e1e32;
+    border-radius: 8px;
+    font-size: 11px;
+  }
+  .log-line {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    color: #555;
+  }
+  .log-line code {
+    background: #1a1a2e;
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: #888;
+    font-size: 10px;
+  }
+  .log-line.log-ok span:first-child { color: #3abb73; }
+  .log-line.log-warn span:first-child { color: #e9a545; }
+
+  /* ── Answer card ── */
+  .answer-card {
+    background: #12121c;
+    border: 1px solid #1e1e32;
+    border-radius: 16px;
+    overflow: hidden;
+    animation: fadeUp 0.4s ease;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .answer-body {
+    padding: 24px;
+  }
+  .answer-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-weight: 700;
+    color: #e94560;
+    margin-bottom: 14px;
+  }
+  .answer-label .dot { width: 8px; height: 8px; background: #e94560; border-radius: 50%; }
+  .answer-content {
+    font-size: 14px;
+    line-height: 1.8;
+  }
+
+  /* ── Expand debate ── */
+  .debate-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 24px;
+    border-top: 1px solid #1e1e32;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    color: #555;
+    transition: background 0.2s, color 0.2s;
+  }
+  .debate-toggle:hover { background: #161622; color: #888; }
+  .debate-toggle .chevron {
+    display: inline-flex;
+    transition: transform 0.3s ease;
+  }
+  .debate-toggle.open .chevron { transform: rotate(90deg); }
+  .debate-detail {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease;
+  }
+  .debate-detail.open { max-height: 5000px; }
+  .debate-inner {
+    padding: 0 24px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Debate entry ── */
+  .debate-entry {
+    border-left: 3px solid #2a2a4a;
+    padding: 10px 14px;
+    background: #0e0e18;
+    border-radius: 0 8px 8px 0;
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .debate-entry.phase-response { border-left-color: #3a6ea5; }
+  .debate-entry.phase-debate { border-left-color: #e94560; }
+  .debate-entry .entry-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    margin-bottom: 6px;
+  }
+  .debate-entry .agent-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .section-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    color: #444;
+    padding: 4px 0;
+    border-bottom: 1px solid #1a1a2e;
+    margin-top: 4px;
+  }
+
+  /* ── Markdown ── */
+  .md h1 { font-size: 16px; font-weight: 700; margin: 10px 0 6px; color: #e94560; border-bottom: 1px solid #1e1e32; padding-bottom: 4px; }
+  .md h2 { font-size: 14px; font-weight: 700; margin: 8px 0 4px; color: #ccc; }
+  .md h3 { font-size: 13px; font-weight: 700; margin: 6px 0 3px; color: #aaa; }
+  .md p { margin: 4px 0; }
+  .md strong { color: #f0f0f0; }
+  .md em { font-style: italic; color: #b0b0b0; }
+  .md ul, .md ol { margin: 4px 0 4px 18px; }
+  .md li { margin: 2px 0; }
+  .md code { background: #1a1a2e; padding: 2px 5px; border-radius: 4px; font-size: 12px; color: #e94560; }
+  .md pre { background: #0a0a14; padding: 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+  .md pre code { background: none; padding: 0; color: #ccc; }
+  .md blockquote { border-left: 3px solid #e94560; padding-left: 10px; margin: 6px 0; color: #888; }
+  .md hr { border: none; border-top: 1px dashed #1e1e32; margin: 8px 0; }
+  .md table { border-collapse: collapse; margin: 6px 0; width: 100%; }
+  .md th, .md td { border: 1px solid #1e1e32; padding: 4px 8px; font-size: 12px; }
+  .md th { background: #1a1a2e; font-weight: 600; }
+
+
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="welcome">
+    <div class="logo">AI Arena</div>
+    <div class="tagline">3 IA debattent, un mediateur tranche</div>
+    <div class="input-box" id="input-box">
+      <input id="msg" placeholder="Pose ta question..." autofocus>
+      <select class="rounds-pill" id="rounds-select">
+        <option value="1">1 round</option>
+        <option value="2" selected>2 rounds</option>
+        <option value="3">3 rounds</option>
+      </select>
+      <button class="send-btn" id="send" aria-label="Envoyer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+  <div id="conversation"></div>
+</div>
+
+<script>
+const welcome = document.getElementById('welcome');
+const conversation = document.getElementById('conversation');
+const msgInput = document.getElementById('msg');
+const sendBtn = document.getElementById('send');
+const roundsSelect = document.getElementById('rounds-select');
+const agents = ['alpha', 'beta', 'gamma'];
+const agentMeta = {
+  alpha: { name: 'ALPHA', color: '#cc8844', freeModel: 'big-pickle', subModel: 'Claude Opus 4.6' },
+  beta:  { name: 'BETA',  color: '#10a37f', freeModel: 'gpt-5-nano', subModel: 'GPT-5' },
+  gamma: { name: 'GAMMA', color: '#4285f4', freeModel: 'nemotron', subModel: 'Gemini 2.5 Pro' },
+};
+const leadMeta = { name: 'LEAD', color: '#e94560', freeModel: 'big-pickle', subModel: 'Claude Opus 4.6' };
+
+function md(text) {
+  if (!text) return '';
+  let h = text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => '<pre><code>' + code + '</code></pre>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^(\|.+\|)\n(\|[-| :]+\|)\n((?:\|.+\|\n?)*)/gm, (_, header, sep, rows) => {
+      const ths = header.split('|').filter(c => c.trim()).map(c => '<th>' + c.trim() + '</th>').join('');
+      const trs = rows.trim().split('\n').map(r => {
+        const tds = r.split('|').filter(c => c.trim()).map(c => '<td>' + c.trim() + '</td>').join('');
+        return '<tr>' + tds + '</tr>';
+      }).join('');
+      return '<table><thead><tr>' + ths + '</tr></thead><tbody>' + trs + '</tbody></table>';
+    })
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/^---$/gm, '<hr>')
+    .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+    .replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>')
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return '<p>' + h + '</p>';
+}
+
+
+
+// ── LocalStorage persistence ──
+const STORAGE_KEY = 'ai-arena-history';
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); }
+  catch { return []; }
+}
+function saveHistory(history) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
+}
+function addToHistory(entry) {
+  const h = loadHistory();
+  h.push(entry);
+  // Keep last 50 conversations
+  if (h.length > 50) h.splice(0, h.length - 50);
+  saveHistory(h);
+}
+
+// ── Build answer card HTML (reused for live + restore) ──
+function buildAnswerCard(verdict, debateLog) {
+  let html = `<div class="answer-body">
+    <div class="answer-label"><span class="dot"></span> Verdict du mediateur <span class="model-tag">${leadMeta.freeModel} → ${leadMeta.subModel}</span></div>
+    <div class="answer-content md">${md(verdict)}</div>
+  </div>`;
+
+  const hasDebate = debateLog.some(e => e.phase === 'debate');
+  const responseEntries = debateLog.filter(e => e.phase === 'response');
+  const debateEntries = debateLog.filter(e => e.phase === 'debate');
+
+  if (debateLog.length > 0) {
+    const toggleLabel = hasDebate
+      ? `Voir la reflexion et le debat (${debateLog.length} echanges)`
+      : `Voir les avis des agents (${responseEntries.length} reponses)`;
+
+    html += `<div class="debate-toggle" onclick="this.classList.toggle('open');this.nextElementSibling.classList.toggle('open')">
+      <span class="chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>
+      ${toggleLabel}
+    </div>`;
+    html += `<div class="debate-detail"><div class="debate-inner">`;
+
+    const maxRound = Math.max(...debateLog.map(e => e.round));
+    for (let r = 1; r <= maxRound; r++) {
+      const roundResponses = responseEntries.filter(e => e.round === r);
+      const roundDebates = debateEntries.filter(e => e.round === r);
+
+      if (roundResponses.length > 0) {
+        html += `<div class="section-label">Round ${r} — Reponses</div>`;
+        for (const entry of roundResponses) {
+          const meta = agentMeta[entry.agent] || { name: entry.agent, color: '#888', freeModel: '?', subModel: '?' };
+          html += `<div class="debate-entry phase-response">
+            <div class="entry-header">
+              <span class="agent-dot" style="background:${meta.color}"></span>
+              ${meta.name} <span class="model-tag">${meta.freeModel} → ${meta.subModel}</span>
+            </div>
+            <div class="md">${md(entry.content)}</div>
+          </div>`;
+        }
+      }
+
+      if (roundDebates.length > 0) {
+        html += `<div class="section-label">Debate ${r} — Critiques</div>`;
+        for (const entry of roundDebates) {
+          const meta = agentMeta[entry.agent] || { name: entry.agent, color: '#888', freeModel: '?', subModel: '?' };
+          html += `<div class="debate-entry phase-debate">
+            <div class="entry-header">
+              <span class="agent-dot" style="background:${meta.color}"></span>
+              ${meta.name} — Critique <span class="model-tag">${meta.freeModel} → ${meta.subModel}</span>
+            </div>
+            <div class="md">${md(entry.content)}</div>
+          </div>`;
+        }
+      }
+    }
+
+    html += `</div></div>`;
+  }
+  return html;
+}
+
+// ── Restore history on page load ──
+function restoreHistory() {
+  const h = loadHistory();
+  if (h.length === 0) return;
+  welcome.classList.add('minimized');
+  for (const entry of h) {
+    const qBubble = document.createElement('div');
+    qBubble.className = 'q-bubble';
+    qBubble.textContent = entry.question;
+    conversation.appendChild(qBubble);
+
+    const card = document.createElement('div');
+    card.className = 'answer-card';
+    card.innerHTML = buildAnswerCard(entry.verdict, entry.debateLog);
+    conversation.appendChild(card);
+  }
+  scrollBottom();
+}
+restoreHistory();
+
+msgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !sendBtn.disabled) doSend(); });
+sendBtn.addEventListener('click', doSend);
+
+async function doSend() {
+  const text = msgInput.value.trim();
+  if (!text) return;
+  msgInput.value = '';
+  sendBtn.disabled = true;
+
+  // Minimize welcome
+  welcome.classList.add('minimized');
+
+  // Add question bubble
+  const qBubble = document.createElement('div');
+  qBubble.className = 'q-bubble';
+  qBubble.textContent = text;
+  conversation.appendChild(qBubble);
+
+  // Add loading card with live feed
+  const loadCard = document.createElement('div');
+  loadCard.className = 'loading-card';
+  loadCard.innerHTML = `
+    <div class="loading-header">
+      <div class="spinner-ring"></div>
+      <div class="loading-status" id="live-status">
+        <div class="step active" data-step="response">Reflexion des agents...</div>
+      </div>
+    </div>
+    <div class="live-feed" id="live-feed"></div>
+  `;
+  conversation.appendChild(loadCard);
+  scrollBottom();
+
+  // Collect full debate log for the expandable section
+  const debateLog = [];
+  let leadVerdict = '';
+
+  const statusEl = loadCard.querySelector('#live-status');
+  const liveFeed = loadCard.querySelector('#live-feed');
+  let currentPhase = 'response';
+
+  function setStatus(phase, label) {
+    // Mark previous steps as done
+    statusEl.querySelectorAll('.step').forEach(s => {
+      if (s.dataset.step !== phase) s.classList.remove('active');
+      if (s.dataset.step === currentPhase && currentPhase !== phase) s.classList.add('done');
+    });
+    // Add or activate current step
+    let el = statusEl.querySelector(`[data-step="${phase}"]`);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'step active';
+      el.dataset.step = phase;
+      statusEl.appendChild(el);
+    }
+    el.textContent = label;
+    el.classList.add('active');
+    el.classList.remove('done');
+    currentPhase = phase;
+  }
+
+  // Live thinking indicators per agent
+  const thinkingEls = {};
+  function showThinking(agentKey, phase) {
+    const meta = agentMeta[agentKey] || { name: agentKey, color: '#888' };
+    // Remove existing thinking indicator for this agent
+    if (thinkingEls[agentKey]) { thinkingEls[agentKey].remove(); delete thinkingEls[agentKey]; }
+    const el = document.createElement('div');
+    el.className = 'live-entry thinking';
+    el.innerHTML = `<span class="agent-dot" style="background:${meta.color}"></span>
+      <span class="live-name">${meta.name}</span>
+      <span class="model-tag">${meta.freeModel} → ${meta.subModel}</span>
+      <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>`;
+    liveFeed.appendChild(el);
+    thinkingEls[agentKey] = el;
+    scrollBottom();
+  }
+
+  function addLiveResponse(agentKey, phase, content) {
+    // Remove thinking indicator
+    if (thinkingEls[agentKey]) { thinkingEls[agentKey].remove(); delete thinkingEls[agentKey]; }
+    const meta = agentMeta[agentKey] || { name: agentKey, color: '#888' };
+    const phaseLabel = phase === 'debate' ? 'Critique' : 'Reponse';
+    const el = document.createElement('div');
+    el.className = 'live-entry ' + (phase === 'debate' ? 'is-debate' : 'is-response');
+    el.innerHTML = `<div class="live-entry-header">
+        <span class="agent-dot" style="background:${meta.color}"></span>
+        <span class="live-name">${meta.name}</span>
+        <span class="model-tag">${meta.freeModel} → ${meta.subModel}</span>
+        <span class="live-phase">${phaseLabel}</span>
+      </div>
+      <div class="live-content md">${md(content.length > 300 ? content.slice(0, 300) + '...' : content)}</div>`;
+    liveFeed.appendChild(el);
+    scrollBottom();
+  }
+
+  const rounds = roundsSelect.value;
+  const es = new EventSource('/api/free-debate?message=' + encodeURIComponent(text) + '&rounds=' + rounds);
+
+  es.addEventListener('round-start', (e) => {
+    const d = JSON.parse(e.data);
+    setStatus('round-' + d.round, 'Round ' + d.round + ' — ' + d.label);
+  });
+
+  es.addEventListener('debate-start', (e) => {
+    const d = JSON.parse(e.data);
+    setStatus('debate-' + d.round, 'Debate ' + d.round + ' — Critiques en cours...');
+  });
+
+  es.addEventListener('agent-thinking', (e) => {
+    const d = JSON.parse(e.data);
+    showThinking(d.agent, d.phase);
+  });
+
+  es.addEventListener('agent-response', (e) => {
+    const d = JSON.parse(e.data);
+    debateLog.push({ agent: d.agent, phase: d.phase, round: d.round, content: d.content });
+    addLiveResponse(d.agent, d.phase, d.content);
+  });
+
+  es.addEventListener('agent-logs', (e) => {
+    const d = JSON.parse(e.data);
+    const meta = agentMeta[d.agent] || leadMeta;
+    const el = document.createElement('div');
+    el.className = 'live-entry log-entry';
+    const verified = d.stderrModels.length > 0 || d.subCalls > 0;
+    const statusIcon = verified ? '&#10003;' : '?';
+    const statusClass = verified ? 'log-ok' : 'log-warn';
+    el.innerHTML = `<div class="log-line ${statusClass}">
+      <span>${statusIcon}</span>
+      <strong>${meta.name}</strong>
+      Free: <code>${d.freeModel}</code>
+      ${d.subCalls > 0 ? `&rarr; Sub-agent x${d.subCalls}` : '(pas de sub-agent)'}
+      ${d.stderrModels.length > 0 ? `| Models: <code>${d.stderrModels.join(', ')}</code>` : ''}
+      ${d.stderrProviders.length > 0 ? `| Providers: <code>${d.stderrProviders.join(', ')}</code>` : ''}
+    </div>`;
+    liveFeed.appendChild(el);
+    scrollBottom();
+  });
+
+  es.addEventListener('lead-thinking', () => {
+    setStatus('lead', 'Le mediateur analyse le debat...');
+  });
+
+  es.addEventListener('lead-verdict', (e) => {
+    const d = JSON.parse(e.data);
+    leadVerdict = d.content;
+  });
+
+  await new Promise((resolve) => {
+    es.addEventListener('done', () => { es.close(); resolve(); });
+    es.addEventListener('error', () => {
+      if (es.readyState === EventSource.CLOSED) { resolve(); return; }
+      es.close(); resolve();
+    });
+  });
+
+  // Remove loading card
+  loadCard.remove();
+
+  // Build answer card
+  const card = document.createElement('div');
+  card.className = 'answer-card';
+  card.innerHTML = buildAnswerCard(leadVerdict, debateLog);
+  conversation.appendChild(card);
+  scrollBottom();
+
+  // Save to localStorage
+  addToHistory({ question: text, verdict: leadVerdict, debateLog, ts: Date.now() });
+
+  sendBtn.disabled = false;
+  msgInput.focus();
+}
+
+function scrollBottom() {
+  const app = document.getElementById('app');
+  requestAnimationFrame(() => app.scrollTo({ top: app.scrollHeight, behavior: 'smooth' }));
+}
+</script>
+</body>
+</html>
